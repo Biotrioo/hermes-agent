@@ -10,8 +10,6 @@ const MOVE_TOLERANCE = 8
 
 interface PressState {
   armed: boolean
-  lastX: number
-  lastY: number
   originH: number
   originW: number
   pointerId: number
@@ -29,13 +27,14 @@ interface PressState {
  * it decides solidity from, so the window is already transparent by the time
  * the press lands and it falls through to the app behind. See click-through.ts.
  *
- * Deltas are read in SCREEN coordinates. Client coordinates are relative to the
- * window we are moving, so a window that keeps up with the cursor reports the
- * same clientX every frame — zero delta, and the drag dies one pixel in.
+ * The renderer only owns hold detection and the size snapshot. Once armed,
+ * main samples the native cursor position in Electron's DIP coordinate space;
+ * renderer PointerEvent screen coordinates are CSS pixels and must not be
+ * added directly to BrowserWindow positions on mixed-DPI displays.
  *
  * The size is snapshotted at press and sent with every move, so main can pin it
  * (see hermes:hud:move-by — a transparent frameless window drifts wider on
- * Windows otherwise). Same shape as the pet overlay's drag.
+ * Windows otherwise). Movement itself is sampled by main in native coordinates.
  */
 export function useHudComposerDrag(enabled: boolean) {
   const [grabbing, setGrabbing] = useState(false)
@@ -49,6 +48,10 @@ export function useHudComposerDrag(enabled: boolean) {
     }
 
     const state = stateRef.current
+
+    if (state?.armed) {
+      window.hermesDesktop?.hud?.endMove?.()
+    }
 
     if (state?.target.hasPointerCapture(state.pointerId)) {
       state.target.releasePointerCapture(state.pointerId)
@@ -68,8 +71,6 @@ export function useHudComposerDrag(enabled: boolean) {
 
       stateRef.current = {
         armed: false,
-        lastX: event.screenX,
-        lastY: event.screenY,
         originH: window.outerHeight,
         originW: window.outerWidth,
         pointerId: event.pointerId,
@@ -90,6 +91,7 @@ export function useHudComposerDrag(enabled: boolean) {
         }
 
         state.armed = true
+        window.hermesDesktop?.hud?.beginMove?.()
         setGrabbing(true)
         triggerHaptic('selection')
 
@@ -130,15 +132,7 @@ export function useHudComposerDrag(enabled: boolean) {
 
       event.preventDefault()
 
-      const dx = event.screenX - state.lastX
-      const dy = event.screenY - state.lastY
-
-      state.lastX = event.screenX
-      state.lastY = event.screenY
-
       window.hermesDesktop?.hud?.moveBy?.({
-        x: dx,
-        y: dy,
         width: state.originW,
         height: state.originH
       })

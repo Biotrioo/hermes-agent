@@ -201,6 +201,7 @@ import {
   writeSecretFileAtomic
 } from './hardening'
 import { cursorPointInWindow } from './hud-cursor'
+import { createHudDragTracker } from './hud-drag'
 import { snapHudBounds } from './hud-snap'
 import { createHudSnapShortcut } from './hud-snap-shortcut'
 import { buildHudWindowUrl } from './hud-url'
@@ -10995,6 +10996,7 @@ function closePetOverlay() {
 // lookalike that drifts. Entering HUD mode hides the main window; leaving
 // restores it.
 let hudWindow = null
+const hudDragTracker = createHudDragTracker()
 
 // Whether the main window was visible when HUD mode was entered, so exiting
 // puts the desktop back as it was rather than raising a window the user had
@@ -11301,6 +11303,8 @@ function spawnHudWindow(sessionId, profile) {
   })
 
   win.on('closed', () => {
+    hudDragTracker.end()
+
     if (hudWindow === win) {
       hudWindow = null
     }
@@ -11390,6 +11394,7 @@ function openHudWindow(sessionId, profile) {
 
 function closeHudWindow() {
   hudSnapShortcut.dispose()
+  hudDragTracker.end()
 
   const win = hudWindow
   hudWindow = null
@@ -12171,29 +12176,49 @@ ipcMain.on('hermes:hud:ignore-mouse', (_event, ignore) => {
   }
 })
 
+ipcMain.on('hermes:hud:begin-move', event => {
+  if (hudWindow && !hudWindow.isDestroyed() && event.sender === hudWindow.webContents) {
+    hudDragTracker.begin(screen.getCursorScreenPoint())
+  }
+})
+
+ipcMain.on('hermes:hud:end-move', event => {
+  if (hudWindow && !hudWindow.isDestroyed() && event.sender === hudWindow.webContents) {
+    hudDragTracker.end()
+  }
+})
+
 ipcMain.on('hermes:hud:move-by', (event, delta) => {
   if (!hudWindow || hudWindow.isDestroyed() || event.sender !== hudWindow.webContents) {
     return
   }
 
-  const dx = Number(delta?.x)
-  const dy = Number(delta?.y)
   const width = Number(delta?.width)
   const height = Number(delta?.height)
 
-  if (!Number.isFinite(dx) || !Number.isFinite(dy) || !Number.isFinite(width) || !Number.isFinite(height)) {
+  if (!Number.isFinite(width) || !Number.isFinite(height)) {
+    return
+  }
+
+  const nativeDelta = hudDragTracker.move(screen.getCursorScreenPoint())
+
+  if (!nativeDelta) {
     return
   }
 
   const [x, y] = hudWindow.getPosition()
 
-  // setBounds — NOT setPosition: on Windows, a transparent frameless window
+  // screen.getCursorScreenPoint() and BrowserWindow bounds use Electron's
+  // native device-independent pixel coordinate space. Sampling both sides in
+  // main avoids renderer CSS-pixel drift when the cursor crosses mixed-DPI
+  // displays. setBounds — NOT setPosition: on Windows, a transparent
+  // frameless window
   // silently grows ~1px per setPosition call (worse at >100% DPI). The renderer
   // snapshots outerWidth/outerHeight when the composer drag arms and re-pins
   // to that size on every moveBy (same pattern as the pet overlay drag).
   hudWindow.setBounds({
-    x: Math.round(x + dx),
-    y: Math.round(y + dy),
+    x: Math.round(x + nativeDelta.x),
+    y: Math.round(y + nativeDelta.y),
     width: Math.round(width),
     height: Math.round(height)
   })

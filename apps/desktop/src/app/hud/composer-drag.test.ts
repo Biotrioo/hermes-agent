@@ -9,6 +9,8 @@ const LONG_PRESS_MS = 140
 const desktopWindow = window as unknown as { hermesDesktop?: Window['hermesDesktop'] }
 const initialHermesDesktop = desktopWindow.hermesDesktop
 
+const beginMove = vi.fn()
+const endMove = vi.fn()
 const moveBy = vi.fn()
 
 function setWindowSize(width: number, height: number) {
@@ -29,9 +31,11 @@ function pressTarget() {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  beginMove.mockClear()
+  endMove.mockClear()
   moveBy.mockClear()
   setWindowSize(620, 320)
-  desktopWindow.hermesDesktop = { hud: { moveBy } } as unknown as Window['hermesDesktop']
+  desktopWindow.hermesDesktop = { hud: { beginMove, endMove, moveBy } } as unknown as Window['hermesDesktop']
 })
 
 afterEach(() => {
@@ -62,14 +66,19 @@ describe('useHudComposerDrag', () => {
     act(() => void vi.advanceTimersByTime(LONG_PRESS_MS))
     act(() => void window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, screenX: 110, screenY: 210 })))
 
-    expect(moveBy).toHaveBeenCalledWith({ x: 10, y: 10, width: 620, height: 320 })
+    expect(beginMove).toHaveBeenCalledTimes(1)
+    expect(moveBy).toHaveBeenCalledWith({ width: 620, height: 320 })
 
     // A window that drifted wider mid-drag must not feed its new size back in —
     // that is exactly how the Windows growth compounded.
     setWindowSize(900, 500)
     act(() => void window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, screenX: 115, screenY: 215 })))
 
-    expect(moveBy).toHaveBeenLastCalledWith({ x: 5, y: 5, width: 620, height: 320 })
+    expect(moveBy).toHaveBeenLastCalledWith({ width: 620, height: 320 })
+
+    act(() => void window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1 })))
+
+    expect(endMove).toHaveBeenCalledTimes(1)
   })
 
   it('does not move the window until the hold arms', () => {
