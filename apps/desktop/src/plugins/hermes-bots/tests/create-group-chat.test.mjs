@@ -25,10 +25,11 @@ test('source contract: create-group modal has search, checkboxes, name, create',
   // so the room rides the ui_meta sync path (no new persistence).
   assert.match(pluginSource, /selected\.length >= 2/)
   assert.match(pluginSource, /saveBotMeta\(bot\.name, \{ group: groupName \}\)/)
-  // Creating drops the user straight into the room.
-  assert.match(pluginSource, /onCreated: groupName => \$groupChatWorkspace\.set\(groupName\)/)
+  // Creating drops the user straight into the room (main window when the
+  // desktop offers host.openWorkspace, in-panel fallback otherwise).
+  assert.match(pluginSource, /onCreated: groupName => openGroupChat\(groupName\)/)
 })
 
 test('source contract: group name falls back to member names, Discord-style', () => {
-  assert.match(pluginSource, /selected\.map\(bot => displayName\(bot, allMeta\[bot\.name\]\)\)\.join\(', '\)/)
+  assert.match(pluginSource, /selected\.map\(bot => displayName\(bot, botRosterMeta\(bot, allMeta\)\)\)\.join\(', '\)/)
 })
