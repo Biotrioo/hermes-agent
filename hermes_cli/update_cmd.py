@@ -3122,7 +3122,7 @@ def _wait_for_windows_update_gateway_exit(
             pass
     return survivors
 
-def _venv_core_imports_healthy() -> tuple[bool, str]:
+def _venv_core_imports_healthy(*, strict: bool = False) -> tuple[bool, str]:
     """Probe the project venv for the core imports the backend needs to boot.
 
     Runs a tiny import check inside the venv interpreter (NOT this process —
@@ -3136,7 +3136,9 @@ def _venv_core_imports_healthy() -> tuple[bool, str]:
     (ryanc's incident, July 2026).
 
     Returns ``(healthy, detail)``. Never raises; unknown states report
-    healthy so a probe failure can't force needless reinstalls.
+    healthy so a probe failure can't force needless reinstalls during the
+    normal update path. Callers that need affirmative proof can pass
+    ``strict=True`` to treat an unavailable probe as unhealthy.
     """
     venv_dir = _m().PROJECT_ROOT / "venv"
     venv_python = venv_python_path(venv_dir, windows=_m()._is_windows())
@@ -3179,6 +3181,8 @@ def _venv_core_imports_healthy() -> tuple[bool, str]:
         )
     except Exception as exc:
         logger.debug("venv health probe failed to run: %s", exc)
+        if strict:
+            return False, f"core import probe failed: {exc}"
         return True, ""
 
     missing = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]

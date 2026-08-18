@@ -32,6 +32,15 @@ def build_update_parser(subparsers, *, cmd_update: Callable) -> None:
         help="Check whether an update is available without installing anything",
     )
     update_parser.add_argument(
+        "--reset-state",
+        action="store_true",
+        default=False,
+        help=(
+            "Clear a resolved .update-incomplete recovery marker after verifying "
+            "that the core environment imports cleanly"
+        ),
+    )
+    update_parser.add_argument(
         "--no-backup",
         action="store_true",
         default=False,

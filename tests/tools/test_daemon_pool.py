@@ -42,6 +42,31 @@ def test_idle_worker_reuse():
         pool.shutdown(wait=True)
 
 
+def test_worker_initializer_and_submit_follow_stdlib_contract():
+    """The custom pool must track CPython's private worker contract.
+
+    Python 3.14 replaced the legacy initializer/initargs arguments with a
+    WorkerContext. This exercises both the worker startup and the initializer
+    so the old four-argument call cannot regress silently into a dead worker.
+    """
+    initialized = threading.Event()
+
+    def initializer(value):
+        assert value == "ready"
+        initialized.set()
+
+    pool = DaemonThreadPoolExecutor(
+        max_workers=1,
+        initializer=initializer,
+        initargs=("ready",),
+    )
+    try:
+        assert pool.submit(lambda: 42).result(timeout=10) == 42
+        assert initialized.wait(timeout=10)
+    finally:
+        pool.shutdown(wait=True)
+
+
 def test_wedged_worker_does_not_block_interpreter_exit():
     """A worker stuck in a long sleep must not hold the process open.
 

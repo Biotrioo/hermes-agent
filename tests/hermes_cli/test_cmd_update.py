@@ -781,6 +781,67 @@ termux = ["rich>=14"]
     assert hm._load_installable_optional_extras(group="termux-all") == ["termux", "mcp"]
 
 
+class TestUpdateRecoveryReset:
+    class _Lock:
+        holder = None
+
+        def __init__(self):
+            self.released = False
+
+        def acquire(self):
+            return True
+
+        def release(self):
+            self.released = True
+
+    def test_reset_state_clears_marker_after_healthy_probe(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        from hermes_cli import main as hm
+
+        marker = tmp_path / ".update-incomplete"
+        marker.write_text('{"attempts": 3}', encoding="utf-8")
+        probe_kwargs = {}
+
+        def healthy_probe(**kwargs):
+            probe_kwargs.update(kwargs)
+            return True, ""
+
+        monkeypatch.setattr(hm, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(hm, "_venv_core_imports_healthy", healthy_probe)
+        monkeypatch.setattr("hermes_cli.update_lock.UpdateLock", self._Lock)
+
+        cmd_update(SimpleNamespace(reset_state=True))
+
+        assert not marker.exists()
+        assert probe_kwargs == {"strict": True}
+        assert "Cleared interrupted-update recovery state" in capsys.readouterr().out
+
+    def test_reset_state_keeps_marker_when_probe_fails(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        from hermes_cli import main as hm
+
+        marker = tmp_path / ".update-incomplete"
+        marker.write_text('{"attempts": 3}', encoding="utf-8")
+        monkeypatch.setattr(hm, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(
+            hm,
+            "_venv_core_imports_healthy",
+            lambda **_kwargs: (False, "yaml: No module named yaml"),
+        )
+        monkeypatch.setattr("hermes_cli.update_lock.UpdateLock", self._Lock)
+
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_update(SimpleNamespace(reset_state=True))
+
+        assert exc_info.value.code == 1
+        assert marker.exists()
+        out = capsys.readouterr().out
+        assert "core imports are unhealthy" in out
+        assert "yaml: No module named yaml" in out
+
+
 class TestNodeRuntimeNpmResolution:
     """Regression tests for #30271 — WSL must not run Windows npm against the
     Linux checkout, and a failed Node refresh must not report success."""

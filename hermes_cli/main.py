@@ -8512,6 +8512,46 @@ def _clear_update_incomplete_marker() -> None:
     _clear_marker_file(_update_marker_path(), label="update-incomplete")
 
 
+def _reset_update_recovery_state() -> bool:
+    """Clear a resolved core-install marker after verifying core imports.
+
+    A failed update deliberately leaves ``.update-incomplete`` behind so the
+    next launch can retry recovery. Once a user has repaired the environment
+    manually, there must be a supported way to stop that retry loop without
+    deleting the marker by hand. Do not clear it unless the same venv health
+    probe used by the updater confirms the core runtime imports cleanly.
+    """
+    from hermes_cli.update_lock import UpdateLock, describe_holder
+
+    update_lock = UpdateLock()
+    if not update_lock.acquire():
+        print(describe_holder(update_lock.holder))
+        return False
+
+    try:
+        marker = _update_marker_path()
+        if not marker.exists():
+            print("No pending interrupted-update recovery state found.")
+            return True
+
+        healthy, detail = _self()._venv_core_imports_healthy(strict=True)
+        if not healthy:
+            print("✗ Cannot reset update recovery state: core imports are unhealthy.")
+            if detail:
+                print(f"  {detail}")
+            print("  Repair the environment first, then retry `hermes update --reset-state`.")
+            return False
+
+        _clear_update_incomplete_marker()
+        if marker.exists():
+            print(f"✗ Could not remove {marker}.")
+            return False
+        print("✓ Cleared interrupted-update recovery state.")
+        return True
+    finally:
+        update_lock.release()
+
+
 def _clear_lazy_refresh_incomplete_marker() -> None:
     """Remove the interrupted lazy-refresh breadcrumb. Never raises."""
     _clear_marker_file(_lazy_refresh_marker_path(), label="lazy-refresh-incomplete")
@@ -9895,6 +9935,11 @@ def cmd_update(args):
     runs the update, then restores stdio on the way out (even on
     ``sys.exit`` or unhandled exceptions).
     """
+    if getattr(args, "reset_state", False):
+        if not _reset_update_recovery_state():
+            sys.exit(1)
+        return
+
     from hermes_cli.config import (
         detect_install_method,
         format_docker_update_message,
