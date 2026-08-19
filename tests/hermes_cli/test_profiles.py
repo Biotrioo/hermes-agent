@@ -1008,6 +1008,8 @@ class TestEdgeCases:
             return_value="hermes gateway run --replace",
         ):
             assert _check_gateway_running(default_home) is True
+
+
     def test_named_profile_uses_shared_gateway_runtime_status(self, profile_env):
         """A multiplex gateway reports served named profiles as running."""
         import gateway.status as gw_status
