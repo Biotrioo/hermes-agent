@@ -463,6 +463,17 @@ What this changes:
 
 Paths support `~` expansion and `${VAR}` substitution; relative paths resolve against your Hermes home. Setting `create_dir` to the local skills dir is the same as leaving it unset.
 
+## Skill Index Description Length (`skills.index_desc_limit`)
+
+The skill index shows up to 60 characters from each description by default. To show and allow longer descriptions, set `index_desc_limit` in `config.yaml`:
+
+```yaml
+skills:
+  index_desc_limit: 160
+```
+
+The setting controls both how many characters the index renders and the description length that `skill_manage` accepts for new or changed skills. Use a value from 4 to 1,024; larger values can add more text to the system prompt.
+
 
 ## Project-Local Skills
 

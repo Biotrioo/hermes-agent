@@ -52,6 +52,16 @@ def test_description_too_long_is_warning():
     assert all(f.severity == WARNING for f in findings)
 
 
+def test_description_length_uses_configured_index_limit(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "config.yaml").write_text("skills:\n  index_desc_limit: 128\n", encoding="utf-8")
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    content = CLEAN.replace("Search arXiv papers by keyword, author, or ID.", "x" * 80)
+
+    assert "description-length" not in _rules(lint_content(content))
+
+
 def test_marketing_words_flagged():
     content = CLEAN.replace(
         "Search arXiv papers by keyword, author, or ID.",

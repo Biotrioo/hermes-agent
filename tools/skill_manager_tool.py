@@ -24,9 +24,10 @@ from utils import atomic_write_text, is_truthy_value
 from hermes_cli.config import cfg_get
 from agent.skill_utils import (
     extract_skill_description,
+    get_skill_index_desc_limit,
     is_skill_description_truncated_for_prompt,
     parse_frontmatter as _parse_frontmatter,
-    SKILL_PROMPT_DESC_LIMIT)
+)
 from tools.skill_manager_guards import (
     _background_review_delete_guard, _background_review_preflight, _background_review_read_before_write_guard,
     _containing_skills_root, _curator_consolidation_delete_guard, _is_path_redirect, _pinned_guard,
@@ -172,14 +173,15 @@ def _validate_frontmatter(content: str) -> Optional[str]:
 
 def _description_budget_error(content: str, before: Optional[str] = None) -> Optional[str]:
     """A description written by this call (a create, or an edit/patch that changes it from the one in
-    ``before``) must fit SKILL_PROMPT_DESC_LIMIT, the width the skill index shows. An unchanged legacy
+    ``before``) must fit the configured skill-index width. An unchanged legacy
     over-limit description stays editable: a body patch must not be blocked by an old frontmatter."""
     desc = _description_of(content) or ""
-    if len(desc) <= SKILL_PROMPT_DESC_LIMIT or (before is not None and desc == _description_of(before)):
+    description_limit = get_skill_index_desc_limit()
+    if len(desc) <= description_limit or (before is not None and desc == _description_of(before)):
         return None
     return (
         f"Description is {len(desc)} chars; a skill description must fit the "
-        f"{SKILL_PROMPT_DESC_LIMIT}-char skill index (one sentence, trigger first, ends with a "
+        f"{description_limit}-char skill index (one sentence, trigger first, ends with a "
         f"period, without repeating the category name). The index clips anything longer. "
         f"Move detail into the skill body.")
 
@@ -434,7 +436,7 @@ def _add_description_prompt_preview(result: dict[str, Any], content: str) -> dic
     if is_skill_description_truncated_for_prompt(fm):
         result["system_prompt_preview"] = (
             f"System prompt will show: \"{extract_skill_description(fm)}\" — shorten the "
-            f"description to {SKILL_PROMPT_DESC_LIMIT} chars so the index shows all of it.")
+            f"description to {get_skill_index_desc_limit()} chars so the index shows all of it.")
     return result
 
 
@@ -845,7 +847,8 @@ def _skill_manage_description() -> str:
         "content alone REPLACES the whole file, read it via skill_view() "
         "first), write_file/remove_file (supporting files), delete (sole "
         "op only). Existing skills are modified wherever they live. "
-        f"Description: max {SKILL_PROMPT_DESC_LIMIT} chars, 'Use when <trigger>. <behavior>.', never "
+        "Description: max skills.index_desc_limit chars (default 60, range 4–1024), "
+        "'Use when <trigger>. <behavior>.', never "
         "the category name (the index shows it). Write lessons, not logs: "
         "imperative rule + why, no PR numbers/dates/incident narration, one "
         "rule per lesson, references/ named by topic (extend before adding). "

@@ -49,6 +49,25 @@ def test_index_rows_carry_each_name_once_and_never_a_half_word(monkeypatch, tmp_
     assert set(index_entries(prompt)) == {"ascii-art", "pixel-art", "computer-use", "hermes-release"}
 
 
+def test_configured_description_limit_rebuilds_prompt_from_snapshot(monkeypatch, tmp_path):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    config = tmp_path / "config.yaml"
+    config.write_text("skills:\n  index_desc_limit: 60\n", encoding="utf-8")
+    description = (
+        "Use when researching a topic across multiple sources and preparing a detailed, cited report."
+    )
+    _skill(tmp_path / "skills", "research/deep-research", description)
+
+    default_prompt = build_skills_system_prompt()
+    default_row = next(line for line in default_prompt.splitlines() if "- deep-research:" in line)
+    assert default_row.endswith("...")
+
+    config.write_text("skills:\n  index_desc_limit: 128\n", encoding="utf-8")
+    expanded_prompt = build_skills_system_prompt()
+    expanded_row = next(line for line in expanded_prompt.splitlines() if "- deep-research:" in line)
+    assert expanded_row.endswith(description)
+
+
 @pytest.mark.parametrize("sep", ["\t", "\u00a0"], ids=["tab", "nbsp"])
 def test_clip_cuts_at_any_whitespace_never_inside_a_word(sep):
     desc = f"alpha{sep}" + f"bravo{sep}" * 12

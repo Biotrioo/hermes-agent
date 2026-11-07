@@ -22,9 +22,9 @@ from hermes_constants import (
 from agent.model_metadata import CHARS_PER_TOKEN
 from agent.runtime_cwd import resolve_agent_cwd
 from agent.skill_utils import (
-    EXCLUDED_SKILL_DIRS, SKILL_SUPPORT_DIRS,
-    TIER_LOCAL, clip_skill_description, extract_skill_conditions, extract_skill_description,
-    get_disabled_skill_names, get_skill_search_roots,
+    EXCLUDED_SKILL_DIRS, SKILL_SUPPORT_DIRS, get_skill_index_desc_limit,
+    TIER_LOCAL, clip_skill_description, extract_skill_conditions,
+    get_disabled_skill_names, get_skill_search_roots, normalize_skill_description,
     iter_skill_index_files, parse_frontmatter, skill_matches_apps, skill_matches_environment,
     skill_matches_platform, skill_matches_platform_list,
 )
@@ -1078,8 +1078,9 @@ _SKILLS_PROMPT_CACHE_MAX = 32
 _SKILLS_PROMPT_CACHE: OrderedDict[tuple, str] = OrderedDict()
 _SKILLS_PROMPT_CACHE_LOCK = threading.Lock()
 # v2 added org provenance fields (org_id/org_author); v4 adds ``rel`` (SKILL.md path relative to its root) for
-# duplicate-name resolution; v5 stores descriptions clipped at a word boundary. Older snapshots are rebuilt.
-_SKILLS_SNAPSHOT_VERSION = 5
+# duplicate-name resolution; v5 stored clipped descriptions, and v6 stores source descriptions so the
+# configured index width can be applied at render time. Older snapshots are rebuilt.
+_SKILLS_SNAPSHOT_VERSION = 6
 
 
 def _skills_prompt_snapshot_path() -> Path:
@@ -1156,10 +1157,11 @@ def _parse_skill_file(skill_file: Path) -> tuple[bool, dict, str]:
     try:
         raw = skill_file.read_text(encoding="utf-8-sig")
         frontmatter, _ = parse_frontmatter(raw)
+        description = normalize_skill_description(frontmatter)
         # Host-platform / runtime-environment gates are offer-time only; explicit loads bypass them.
         if not skill_matches_platform(frontmatter) or not skill_matches_environment(frontmatter) or not skill_matches_apps(frontmatter):
-            return False, frontmatter, extract_skill_description(frontmatter)
-        return True, frontmatter, extract_skill_description(frontmatter)
+            return False, frontmatter, description
+        return True, frontmatter, description
     except Exception as e:
         logger.warning("Failed to parse skill file %s: %s", skill_file, e)
         return True, {}, ""
@@ -1211,7 +1213,10 @@ def _plugin_skill_prompt_rows(
             if not _skill_should_show(extract_skill_conditions(frontmatter), available_tools,
                                       available_toolsets, session_platform):
                 continue
-            desc = clip_skill_description(str(meta.get("description") or "").strip()) or extract_skill_description(frontmatter)
+            desc = (
+                normalize_skill_description({"description": meta.get("description")})
+                or normalize_skill_description(frontmatter)
+            )
             rows.append((name, desc))
     except Exception:
         logger.debug("Plugin skill prompt rows unavailable", exc_info=True)
@@ -1295,11 +1300,14 @@ def _label_visible_entries(visible_entries: list[dict], skills_by_category: dict
 def _render_skills_index(
     skills_by_category: dict[str, list[tuple[str, str]]],
     compact_categories: frozenset[str] | None, available_tools: set[str] | None, unloadable: list[str] = (),
+    description_limit: int | None = None,
 ) -> str:
     """Render the ## Skills block; "" when there is nothing to list. *unloadable* names (different skills
     sharing a name AND relative path within one tier — one root or several) get a rename note instead of a row skill_view would refuse."""
     if not skills_by_category:
         return ""
+    if description_limit is None:
+        description_limit = get_skill_index_desc_limit()
     # Demoted categories collapse to one names-only line. NEVER drop entries — agent-created skills are the
     # model's project memory and it won't rediscover them via skills_list. Nested categories follow their parent.
     demoted = frozenset(cat for cat in skills_by_category if cat.split("/", 1)[0] in (compact_categories or frozenset()))
@@ -1322,6 +1330,10 @@ def _render_skills_index(
             continue
         rows: dict[str, str] = {}
         for name, desc in sorted(entries, key=lambda x: x[0]):  # stable: first entry per name wins
+            if desc.startswith("[project] "):
+                desc = "[project] " + clip_skill_description(desc[len("[project] "):], description_limit)
+            else:
+                desc = clip_skill_description(desc, description_limit)
             rows.setdefault(name, desc)
         # A one-skill category is a single top-level row: its header would only repeat what the row
         # says (a skill at the top of the tree is its own category, so the name printed twice).
@@ -1380,11 +1392,12 @@ def _build_skills_system_prompt_inner(
     manifest = _build_skills_manifest(skills_dir)
     files = frozenset((rel, *sig) for rel, sig in manifest.items())
     files |= {(str(d), rel, *sig) for _, d in extra_roots for rel, sig in _build_skills_manifest(d).items()}
+    description_limit = get_skill_index_desc_limit()
     cache_key = (
         str(skills_dir), tuple((t, str(d)) for t, d in extra_roots), files,
         tuple(sorted(str(t) for t in (available_tools or set()))),
         tuple(sorted(str(ts) for ts in (available_toolsets or set()))),
-        _platform_hint, tuple(sorted(disabled)), tuple(sorted(compact_categories or ())),
+        _platform_hint, tuple(sorted(disabled)), tuple(sorted(compact_categories or ())), description_limit,
         _oneshot_prompt_variant(), tuple(plugin_rows),
     )
     snapshot = _load_skills_snapshot(skills_dir, manifest)
@@ -1450,7 +1463,9 @@ def _build_skills_system_prompt_inner(
             logger.debug("Could not write skills prompt snapshot: %s", e)
 
     unloadable = sorted({e["name"] for e in visible_entries if not e["load_name"]})
-    result = _render_skills_index(skills_by_category, compact_categories, available_tools, unloadable)
+    result = _render_skills_index(
+        skills_by_category, compact_categories, available_tools, unloadable, description_limit,
+    )
     with _SKILLS_PROMPT_CACHE_LOCK:
         _SKILLS_PROMPT_CACHE[cache_key] = result
         _SKILLS_PROMPT_CACHE.move_to_end(cache_key)

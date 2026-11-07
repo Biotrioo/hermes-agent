@@ -1428,9 +1428,9 @@ DEFAULT_CONFIG = {
             }
         },
     },
-    # Skills — external skill directories shared across tools/agents. Paths are expanded (~, ${VAR})
-    # and resolved; read-only — creation goes to ~/.hermes/skills/ unless create_dir redirects it.
+    # Skills — index descriptions and external dirs. Paths use ~/${VAR}; creation defaults to ~/.hermes/skills/.
     "skills": {
+        "index_desc_limit": 60,  # index width: 4–1,024; skill_manage accepts the same limit
         "external_dirs": [],   # e.g. ["~/.agents/skills", "/shared/team-skills"]
         # Where skill_manage-created skills go (empty = profile-local dir). When set, new skills
         # land here AND agent-facing instructions name this path; expanded (~, ${VAR}), relative to

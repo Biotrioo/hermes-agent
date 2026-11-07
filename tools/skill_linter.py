@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
-from agent.skill_utils import SKILL_PROMPT_DESC_LIMIT, parse_frontmatter
+from agent.skill_utils import get_skill_index_desc_limit, parse_frontmatter
 
 # Shell utilities already wrapped as native tools; naming them in prose steers
 # the model to a raw shell call. banned token -> native tool to name instead.
@@ -88,13 +88,13 @@ def _check_frontmatter(frontmatter: dict[str, Any], skill_dir: Optional[Path]) -
     if skill_dir is not None and name and name != skill_dir.name:
         yield _err("name-dir-mismatch", f"frontmatter name '{name}' does not match directory "
                    f"'{skill_dir.name}'; they must be identical.")
-    # Measure the raw authored value: extract_skill_description() already
-    # truncates to the prompt budget, so it can never exceed the limit.
+    # Measure the raw authored value before the prompt renderer clips it to the configured budget.
     desc = str(frontmatter.get("description", "")).strip().strip("'\"")
-    if len(desc) > SKILL_PROMPT_DESC_LIMIT:
+    description_limit = get_skill_index_desc_limit()
+    if len(desc) > description_limit:
         yield _warn("description-length",
                     f"description is {len(desc)} chars; the skill index shows "
-                    f"{SKILL_PROMPT_DESC_LIMIT} and clips the rest, losing routing "
+                    f"{description_limit} and clips the rest, losing routing "
                     f"signal. Keep it to one sentence.")
     hits = [w for w in _MARKETING_WORDS if re.search(rf"\b{re.escape(w)}\b", desc.lower())]
     if hits:

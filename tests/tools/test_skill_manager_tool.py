@@ -284,6 +284,18 @@ class TestCreateSkill:
         fm, _ = parse_frontmatter(LONG_DESC_CONTENT)
         assert extract_skill_description(fm) in body["system_prompt_preview"]
 
+    def test_written_long_desc_uses_configured_index_limit(self, tmp_path, monkeypatch):
+        home = tmp_path / "home"
+        home.mkdir()
+        (home / "config.yaml").write_text("skills:\n  index_desc_limit: 128\n", encoding="utf-8")
+        monkeypatch.setenv("HERMES_HOME", str(home))
+        with (
+            _skill_dir(tmp_path / "skills"),
+            patch("tools.skill_manager_tool._security_scan_skill", return_value=None),
+        ):
+            result = _create_skill("long-desc", LONG_DESC_CONTENT)
+        assert result["success"] is True
+
     def test_explicit_skill_md_paths_cannot_write_a_long_desc(self, tmp_path):
         """patch(file_path='SKILL.md') and write_file('SKILL.md') reach the same root file as a plain
         patch/edit, so the description written through them must fit the index width too."""

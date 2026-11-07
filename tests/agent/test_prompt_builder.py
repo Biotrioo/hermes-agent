@@ -218,13 +218,12 @@ class TestParseSkillFile:
         assert desc == "A useful test skill"
 
 
-    def test_long_description_truncated(self, tmp_path):
+    def test_long_description_preserved_until_index_render(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
         long_desc = "A" * 100
         skill_file.write_text(f"---\ndescription: {long_desc}\n---\n")
         _, _, desc = _parse_skill_file(skill_file)
-        assert len(desc) <= 60
-        assert desc.endswith("...")
+        assert desc == long_desc
 
 
     def test_logs_parse_failures_and_returns_defaults(self, tmp_path, monkeypatch, caplog):

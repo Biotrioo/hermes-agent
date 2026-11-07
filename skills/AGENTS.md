@@ -25,12 +25,12 @@ stored under `skills.config.<key>`, prompted during setup, injected at load). To
 
 Every new or modernised skill — bundled, optional, or contributed — meets all of these before merge:
 
-1. **`description` ≤ 60 chars, one sentence, ends with a period.** Long descriptions bloat listings
+1. **Bundled, optional, and contributed descriptions stay ≤ 60 chars, one sentence, and end with a period.** Long descriptions bloat listings
    and dilute attention when many skills load. State the capability, not the implementation; no
    marketing words ("powerful", "comprehensive", "seamless", "advanced"); don't repeat the name or
-   the category name (the skill index already prints the category above the skill). 60 is the width
-   the index shows (`SKILL_PROMPT_DESC_LIMIT`); `skill_manage` rejects a new or changed description
-   over it.
+   the category name (the skill index already prints the category above the skill). The default
+   index width is 60 (`SKILL_PROMPT_DESC_LIMIT`); users can raise the runtime index and `skill_manage`
+   write limit with `skills.index_desc_limit` (4–1,024).
 2. **Prose references native Hermes tools or the MCP servers the skill expects, in backticks**
    (`terminal`, `web_extract`, `read_file`, `patch`, `search_files`, `vision_analyze`,
    `browser_exec`, `delegate_task`). Never name shell utilities the agent has wrapped: `grep` →
