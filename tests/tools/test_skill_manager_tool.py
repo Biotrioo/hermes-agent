@@ -171,6 +171,15 @@ class TestCreateSkill:
         assert result["success"] is True
         assert (tmp_path / "my-skill" / "SKILL.md").exists()
 
+    def test_create_accepts_description_with_configured_index_limit(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        (tmp_path / "config.yaml").write_text(
+            "skills:\n  index_desc_limit: 120\n", encoding="utf-8")
+        with _skill_dir(tmp_path):
+            result = _create_skill("long-desc", LONG_DESC_CONTENT)
+        assert result["success"] is True, result.get("error")
+        assert (tmp_path / "long-desc" / "SKILL.md").exists()
+
     def test_create_duplicate_blocked(self, tmp_path):
         with _skill_dir(tmp_path):
             _create_skill("my-skill", VALID_SKILL_CONTENT)

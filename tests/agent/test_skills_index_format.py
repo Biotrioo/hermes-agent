@@ -4,7 +4,7 @@ import re
 import pytest
 
 from agent.prompt_builder import build_skills_system_prompt, clear_skills_system_prompt_cache
-from agent.skill_utils import SKILL_PROMPT_DESC_LIMIT, clip_skill_description
+from agent.skill_utils import SKILL_PROMPT_DESC_LIMIT, clip_skill_description, get_skill_index_desc_limit
 from agent.skills_index_delta import index_entries
 
 LONG = "Use when cutting, publishing, or abandoning a hermes-agent release and its notes."
@@ -47,6 +47,35 @@ def test_index_rows_carry_each_name_once_and_never_a_half_word(monkeypatch, tmp_
     assert LONG.startswith(kept) and LONG[len(kept)] in " ,"  # cut lands between words
     # The turn-delta parser reads flattened rows like nested ones.
     assert set(index_entries(prompt)) == {"ascii-art", "pixel-art", "computer-use", "hermes-release"}
+
+
+def test_index_desc_limit_config_invalidates_cached_prompt_and_snapshot(monkeypatch, tmp_path):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    skills = tmp_path / "skills"
+    desc = "Use when routing a longer skill description that includes the trigger and important search terms."
+    _skill(skills, "general/routing-guide", desc)
+
+    default_prompt = build_skills_system_prompt()
+    assert desc not in default_prompt
+
+    (tmp_path / "config.yaml").write_text("skills:\n  index_desc_limit: 120\n", encoding="utf-8")
+    configured_prompt = build_skills_system_prompt()
+
+    assert desc in configured_prompt
+    snapshot = (tmp_path / ".skills_prompt_snapshot.json").read_text(encoding="utf-8")
+    assert '"description_limit": 120' in snapshot
+
+
+def test_index_desc_limit_rejects_invalid_config_and_keeps_default(monkeypatch, tmp_path):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    (tmp_path / "config.yaml").write_text("skills:\n  index_desc_limit: 3\n", encoding="utf-8")
+    assert get_skill_index_desc_limit() == SKILL_PROMPT_DESC_LIMIT
+
+
+def test_index_desc_limit_default_is_seeded_in_config_schema():
+    from hermes_cli.config_defaults import DEFAULT_CONFIG
+
+    assert DEFAULT_CONFIG["skills"]["index_desc_limit"] == SKILL_PROMPT_DESC_LIMIT
 
 
 @pytest.mark.parametrize("sep", ["\t", "\u00a0"], ids=["tab", "nbsp"])

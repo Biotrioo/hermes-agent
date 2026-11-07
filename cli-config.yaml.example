@@ -1210,6 +1210,10 @@ streaming:
 # also create new skills after completing complex tasks.
 #
 skills:
+  # Maximum skill-description characters shown in the prompt index and accepted
+  # by skill_manage. Range: 4–1024. Default: 60.
+  index_desc_limit: 60
+
   # Nudge the agent to create skills after complex tasks.
   # Every N tool-calling iterations, remind the model to consider saving a skill.
   # Set to 0 to disable.

@@ -840,12 +840,26 @@ def resolve_skill_config_values(config_vars: list[dict[str, Any]]) -> dict[str, 
     return resolved
 
 
-# Max description chars shown per row of the system-prompt skill index. skill_manage rejects a new or changed
-# description over it and tests/skills/test_authoring_standards.py holds shipped skills to it, so only legacy or
-# hand-edited skills ever reach clip_skill_description().
+# Default maximum description chars shown per row of the system-prompt skill index. The effective limit is
+# configurable per profile through skills.index_desc_limit; shipped skills still follow the repo's 60-char standard.
 SKILL_PROMPT_DESC_LIMIT = 60
+_MIN_SKILL_PROMPT_DESC_LIMIT = 4  # leaves room for the clipping ellipsis
+_MAX_SKILL_PROMPT_DESC_LIMIT = 1024  # matches skill_manage's stored-description ceiling
 _LAST_WHITESPACE_RE = re.compile(r"\s\S*$")
 _CLIP_TRAIL_RE = re.compile(r"[\s.,;:\-\u2013\u2014(/]+$")
+
+
+def get_skill_index_desc_limit() -> int:
+    """Configured prompt-index description budget, defaulting safely to 60 chars.
+
+    ``skills.index_desc_limit`` is an integer from 4 through 1024. Invalid values fall back to
+    the default so malformed config cannot break prompt construction or skill writes.
+    """
+    limit = _skills_cfg_get("index_desc_limit")
+    if (isinstance(limit, int) and not isinstance(limit, bool)
+            and _MIN_SKILL_PROMPT_DESC_LIMIT <= limit <= _MAX_SKILL_PROMPT_DESC_LIMIT):
+        return limit
+    return SKILL_PROMPT_DESC_LIMIT
 
 
 def _normalize_skill_description(frontmatter: dict[str, Any]) -> str:
@@ -855,13 +869,14 @@ def _normalize_skill_description(frontmatter: dict[str, Any]) -> str:
 
 
 def clip_skill_description(desc: str) -> str:
-    """*desc* fitted to SKILL_PROMPT_DESC_LIMIT, cut at a word boundary so the index never shows a half word."""
-    if len(desc) <= SKILL_PROMPT_DESC_LIMIT:
+    """Fit *desc* to the configured index budget without cutting a word in half."""
+    limit = get_skill_index_desc_limit()
+    if len(desc) <= limit:
         return desc
-    head = desc[:SKILL_PROMPT_DESC_LIMIT - 2]  # one char past the budget: whitespace there means the last word is whole
+    head = desc[:limit - 2]  # one char past the budget: whitespace there means the last word is whole
     boundary = _LAST_WHITESPACE_RE.search(head)  # any whitespace (tab, NBSP, ...) separates words, not just " "
     if not boundary or boundary.start() == 0:  # a single word longer than the budget has no boundary to cut at
-        return desc[:SKILL_PROMPT_DESC_LIMIT - 3] + "..."
+        return desc[:limit - 3] + "..."
     return _CLIP_TRAIL_RE.sub("", head[:boundary.start()]) + "..."
 
 
@@ -872,7 +887,7 @@ def extract_skill_description(frontmatter: dict[str, Any]) -> str:
 
 def is_skill_description_truncated_for_prompt(frontmatter: dict[str, Any]) -> bool:
     """True when the description will be truncated in the system prompt skill index."""
-    return len(_normalize_skill_description(frontmatter)) > SKILL_PROMPT_DESC_LIMIT
+    return len(_normalize_skill_description(frontmatter)) > get_skill_index_desc_limit()
 
 
 def iter_skill_index_files(skills_dir: Path, filename: str):

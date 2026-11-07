@@ -14,16 +14,16 @@ HARDLINE rules a maintainer enforces in review:
 
 Frontmatter:
 - name: lowercase-hyphenated, <=64 chars, no spaces.
-- description: ONE sentence, **<=60 characters**, ends with a period. State the
+- description: ONE sentence, **<={__INDEX_DESC_LIMIT__} characters**, ends with a period. State the
   capability, not the implementation. No marketing words (powerful,
   comprehensive, seamless, advanced, robust). Do NOT repeat the skill name. If
   the description contains a colon, wrap the whole value in double quotes.
   This is the most-violated rule and it is NOT cosmetic: the system-prompt
-  skill index truncates the description to 60 chars and loads it every
-  session, so anything past char 60 is silently cut and never routes. After
-  you write the description, COUNT the characters; if it is over 60, cut it
+  skill index uses the configured description budget ({__INDEX_DESC_LIMIT__} chars) and loads it every
+  session, so anything past that limit is clipped and never routes. After
+  you write the description, COUNT the characters; if it is over the limit, cut it
   down before saving — do not ship a sentence and hope.
-    Good (<=60): `Search arXiv papers by keyword, author, or ID.`
+    Good: `Search arXiv papers by keyword, author, or ID.`
     Bad (123):   `A comprehensive skill that lets the agent search arXiv for
                   academic papers using keywords, authors, and categories.`
 - version: 0.1.0
@@ -140,6 +140,9 @@ def build_learn_prompt(user_request: str) -> str:
         "the workflow we just went through in this conversation — review "
         "the steps taken and distill them into a reusable skill"
     )
+    from agent.skill_utils import get_skill_index_desc_limit
+    authoring_standards = _AUTHORING_STANDARDS.replace(
+        "{__INDEX_DESC_LIMIT__}", str(get_skill_index_desc_limit()))
 
     return (
         "[/learn] The user wants you to learn a reusable skill from the "
@@ -189,7 +192,7 @@ def build_learn_prompt(user_request: str) -> str:
         "the next; finish by reconciling the SKILL.md index with every "
         "reference file you wrote.\n\n"
         f"{_SOURCE_HYGIENE}\n\n"
-        f"{_AUTHORING_STANDARDS}\n\n"
+        f"{authoring_standards}\n\n"
         f"{_KNOWLEDGE_SKILL_STANDARDS}\n\n"
         "When done, tell the user the skill name, its category, a one-line "
         "summary of what it captured, and — for a knowledge-base skill — the "

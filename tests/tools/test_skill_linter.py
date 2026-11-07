@@ -52,6 +52,15 @@ def test_description_too_long_is_warning():
     assert all(f.severity == WARNING for f in findings)
 
 
+def test_description_lint_uses_configured_index_limit(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    (tmp_path / "config.yaml").write_text(
+        "skills:\n  index_desc_limit: 120\n", encoding="utf-8")
+    desc = "Use when a longer description still fits the configured skill index budget."
+    findings = lint_content(CLEAN.replace("Search arXiv papers by keyword, author, or ID.", desc))
+    assert "description-length" not in _rules(findings)
+
+
 def test_marketing_words_flagged():
     content = CLEAN.replace(
         "Search arXiv papers by keyword, author, or ID.",

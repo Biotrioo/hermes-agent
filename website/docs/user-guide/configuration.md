@@ -848,6 +848,21 @@ Docker, Modal, Daytona, Vercel Sandbox and plugin backends (Singularity included
 
 See [Code Execution](features/code-execution.md) and the [Terminal section of the README](features/tools.md) for details on each backend.
 
+## Skill Index Description Limit
+
+The system-prompt skill index clips long descriptions, and `skill_manage` uses the same budget when it creates or changes a skill description. The default is 60 characters. Set `skills.index_desc_limit` to an integer from 4 through 1024 to allow longer routing descriptions:
+
+```yaml
+skills:
+  index_desc_limit: 160   # default: 60; maximum: 1024
+```
+
+The limit applies to newly built prompts and new or changed descriptions. Descriptions from older or manually edited skills that exceed it are clipped at a word boundary. Open conversations keep their existing system prompt until the next session.
+
+```bash
+hermes config set skills.index_desc_limit 160
+```
+
 ## Skill Settings
 
 Skills can declare their own configuration settings via their SKILL.md frontmatter. These are non-secret values (paths, preferences, domain settings) stored under the `skills.config` namespace in `config.yaml`.

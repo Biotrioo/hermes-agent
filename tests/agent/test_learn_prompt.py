@@ -15,6 +15,13 @@ class TestBuildLearnPrompt:
         prompt = build_learn_prompt(req)
         assert req in prompt
 
+    def test_authoring_description_budget_uses_profile_config(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        (tmp_path / "config.yaml").write_text(
+            "skills:\n  index_desc_limit: 120\n", encoding="utf-8")
+        prompt = build_learn_prompt("a skill with a longer trigger description")
+        assert "<=120 characters" in prompt
+
 
 class TestLearnRegistryWiring:
     def test_learn_is_not_cli_only(self):

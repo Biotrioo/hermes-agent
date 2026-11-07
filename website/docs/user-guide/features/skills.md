@@ -120,9 +120,9 @@ hermes chat --toolsets skills -q "Show me the axolotl skill"
 reference material — into a reusable skill, without hand-writing the
 `SKILL.md`. It is open-ended: point it at *anything you can describe* and the
 agent gathers the material with the tools it already has, then authors a skill
-that follows the [house authoring standards](#skillmd-format) (≤60-char
-description, the standard section order, Hermes-tool framing, no invented
-commands).
+that follows the [house authoring standards](#skillmd-format) (a 60-character
+description by default, configurable with `skills.index_desc_limit`, the
+standard section order, Hermes-tool framing, no invented commands).
 
 ```bash
 # A local SDK or doc directory — read with read_file / search_files
